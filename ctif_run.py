@@ -25,7 +25,7 @@ vs XLU) are more informative than the headline CTIF-vs-SPY line.
 # ===========================================================================
 # CONFIG  -  edit these two lines
 # ===========================================================================
-API_KEY = "PUT_YOUR_ALPHAVANTAGE_KEY_HERE"
+API_KEY = "REDACTED"
 CACHE_DIR = "ctif_cache"          # local folder for downloaded CSVs
 
 BASE_DATE = "2022-01-03"
@@ -325,9 +325,69 @@ def benchmark_tr(px, calendar):
 # ---------------------------------------------------------------------------
 # Charts
 # ---------------------------------------------------------------------------
+def _windows(levels):
+    """Return {horizon: (start_date, end_date)} for the return columns."""
+    import pandas as pd
+    end = levels.index[-1]
+    s = levels.iloc[:, 0].dropna()
+    def prev_close(cut):
+        w = levels.index[levels.index <= cut]
+        return w[-1] if len(w) else levels.index[0]
+    wk = levels.index[-6] if len(levels) > 6 else levels.index[0]
+    return {
+        "1W": (wk, end),
+        "YTD": (prev_close(pd.Timestamp(end.year, 1, 1) -
+                           pd.Timedelta(days=1)), end),
+        "1Y": (prev_close(end - pd.Timedelta(days=365)), end),
+        "Full": (levels.index[0], end),
+    }
+
+
+def _ret(s, start):
+    s = s.dropna()
+    w = s.loc[:start]
+    base = w.iloc[-1] if len(w) else s.iloc[0]
+    return s.iloc[-1] / base - 1.0
+
+
+def _ann_vol(s):
+    r = s.dropna().pct_change().dropna()
+    return float(r.std(ddof=1)) * (252 ** 0.5) if len(r) > 2 else float("nan")
+
+
+def _max_dd(s, since=None):
+    """Return (mdd, peak_date, trough_date, recovery_date_or_None)."""
+    s = s.dropna()
+    if since is not None:
+        s = s.loc[since:]
+    if len(s) < 2:
+        return float("nan"), None, None, None
+    dd = s / s.cummax() - 1.0
+    trough = dd.idxmin()
+    mdd = float(dd.min())
+    peak = s.loc[:trough].idxmax()
+    peak_val = s.loc[peak]
+    after = s.loc[trough:]
+    rec = after[after >= peak_val]
+    recovery = rec.index[0] if len(rec) else None
+    return mdd, peak, trough, recovery
+
+
+# Distinct colors for on-screen readability.
+COLORS = {
+    "CTIF Composite": "#111111", "Composite": "#111111",
+    "Builders": "#1f77b4", "Components": "#d62728", "Resources": "#2ca02c",
+    "SPY": "#7f7f7f", "QQQ": "#9467bd", "SMH": "#ff7f0e", "XLU": "#17becf",
+}
+
+SERIES_ROWS = [("CTIF-X", "CTIF Composite"), ("CTIF-B", "Builders"),
+               ("CTIF-C", "Components"), ("CTIF-R", "Resources")]
+
+
 def make_charts(levels, bench):
     import matplotlib.pyplot as plt
     from matplotlib.ticker import PercentFormatter
+    import pandas as pd
     import logging
     logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
     from matplotlib import font_manager
@@ -337,84 +397,184 @@ def make_charts(levels, bench):
             plt.rcParams["font.family"] = cand
             break
 
-    ctif_styles = {"CTIF-X": ("black", "-", 2.2), "CTIF-B": ("black", "--", 1.2),
-                   "CTIF-C": ("0.4", ":", 1.4), "CTIF-R": ("black", "-.", 1.2)}
-    names = {"CTIF-X": "Composite", "CTIF-B": "Builders",
-             "CTIF-C": "Components", "CTIF-R": "Resources"}
+    ctif = [("CTIF-X", "Composite", 2.6), ("CTIF-B", "Builders", 1.6),
+            ("CTIF-C", "Components", 1.6), ("CTIF-R", "Resources", 1.6)]
 
     # 1) Full history, TR
-    fig, ax = plt.subplots(figsize=(11, 6))
-    for code, (c, ls, lw) in ctif_styles.items():
+    fig1, ax = plt.subplots(figsize=(11, 6))
+    for code, name, lw in ctif:
         s = levels[f"{code}-TR"].dropna()
-        ax.plot(s.index, s.values, color=c, linestyle=ls, linewidth=lw,
-                label=names[code])
-    ax.set_title("CTIF index family, total return (base 100 = 2022-01-03)")
+        ax.plot(s.index, s.values, color=COLORS[name], linewidth=lw,
+                label=name)
+    ax.set_title("CTIF index family, total return "
+                 f"({levels.index[0].date()} = 100, "
+                 f"through {levels.index[-1].date()})")
     ax.set_ylabel("Index level")
     ax.legend(frameon=False)
-    ax.grid(axis="y", color="0.85", linewidth=0.6)
-    fig.tight_layout()
+    ax.grid(True, color="0.9", linewidth=0.6)
+    fig1.tight_layout()
 
-    # 2) Trailing 1 year, CTIF composite vs benchmarks, rebased to 100
-    fig2, ax2 = plt.subplots(figsize=(11, 6))
     end = levels.index[-1]
     start = end - pd.Timedelta(days=365)
-    comp = levels["CTIF-X-TR"].loc[start:]
-    comp = 100.0 * comp / comp.iloc[0]
-    ax2.plot(comp.index, comp.values, color="black", linewidth=2.4,
+
+    def rebased(s):
+        s = s.loc[start:].dropna()
+        return 100.0 * s / s.iloc[0] if len(s) else s
+
+    # 2) Trailing 1 year: composite + benchmarks
+    fig2, ax2 = plt.subplots(figsize=(11, 6))
+    c = rebased(levels["CTIF-X-TR"])
+    ax2.plot(c.index, c.values, color=COLORS["Composite"], linewidth=2.8,
              label="CTIF Composite")
-    bench_styles = [("0.35", "--", 1.5), ("0.5", ":", 1.6),
-                    ("0.2", "-.", 1.4), ("0.6", (0, (5, 1)), 1.5)]
-    for (b, (c, ls, lw)) in zip(bench.columns, bench_styles):
-        s = bench[b].loc[start:].dropna()
-        if s.empty:
-            continue
-        s = 100.0 * s / s.iloc[0]
-        ax2.plot(s.index, s.values, color=c, linestyle=ls, linewidth=lw,
-                 label=b)
-    ax2.set_title("Trailing 1 year, total return, rebased to 100")
+    for b in bench.columns:
+        s = rebased(bench[b])
+        if len(s):
+            ax2.plot(s.index, s.values, color=COLORS.get(b), linewidth=1.8,
+                     linestyle="--", label=b)
+    ax2.set_title(f"Trailing 1 year, total return, rebased to 100 "
+                  f"({start.date()} to {end.date()})")
     ax2.set_ylabel("Rebased level")
     ax2.legend(frameon=False)
-    ax2.grid(axis="y", color="0.85", linewidth=0.6)
+    ax2.grid(True, color="0.9", linewidth=0.6)
     fig2.tight_layout()
 
-    # 3) Drawdown, TR
-    fig3, ax3 = plt.subplots(figsize=(11, 4.5))
-    for code, (c, ls, lw) in ctif_styles.items():
+    # 3) Trailing 1 year: composite + sleeves vs sector benchmarks
+    fig3, ax3 = plt.subplots(figsize=(11, 6))
+    cx = rebased(levels["CTIF-X-TR"])
+    ax3.plot(cx.index, cx.values, color=COLORS["Composite"], linewidth=2.8,
+             label="CTIF Composite")
+    for code, name, _ in ctif[1:]:
+        s = rebased(levels[f"{code}-TR"])
+        ax3.plot(s.index, s.values, color=COLORS[name], linewidth=2.0,
+                 label=name)
+    for b in ["SMH", "XLU", "SPY"]:
+        if b in bench.columns:
+            s = rebased(bench[b])
+            ax3.plot(s.index, s.values, color=COLORS.get(b), linewidth=1.5,
+                     linestyle="--", label=b)
+    ax3.set_title(f"Trailing 1 year, composite and sleeves vs benchmarks "
+                  f"({start.date()} to {end.date()})")
+    ax3.set_ylabel("Rebased level")
+    ax3.legend(frameon=False, ncol=2)
+    ax3.grid(True, color="0.9", linewidth=0.6)
+    fig3.tight_layout()
+
+    # 4) Drawdown
+    fig4, ax4 = plt.subplots(figsize=(11, 4.8))
+    for code, name, lw in ctif:
         s = levels[f"{code}-TR"].dropna()
         dd = s / s.cummax() - 1.0
-        ax3.plot(dd.index, dd.values, color=c, linestyle=ls, linewidth=lw,
-                 label=names[code])
-    ax3.set_title("Drawdown from running peak, total return")
-    ax3.yaxis.set_major_formatter(PercentFormatter(xmax=1.0))
-    ax3.legend(frameon=False, loc="lower left")
-    ax3.grid(axis="y", color="0.85", linewidth=0.6)
-    fig3.tight_layout()
+        ax4.plot(dd.index, dd.values, color=COLORS[name], linewidth=lw,
+                 label=name)
+    ax4.set_title("Drawdown from running peak, total return (full history)")
+    ax4.yaxis.set_major_formatter(PercentFormatter(xmax=1.0))
+    ax4.legend(frameon=False, loc="lower left")
+    ax4.grid(True, color="0.9", linewidth=0.6)
+    fig4.tight_layout()
+
+    # 5) Two tables: returns (with date windows) and risk (with dd dates)
+    make_table_figures(levels, bench)
 
     plt.show()
 
 
+def _all_series(levels, bench):
+    rows = [(name, levels[f"{code}-TR"]) for code, name in SERIES_ROWS]
+    rows += [(b, bench[b]) for b in bench.columns]
+    return rows
+
+def make_table_figures(levels, bench):
+    """Single clean trailing-1-year table: return, vol, drawdown with dates.
+    A separate since-inception table is also drawn, clearly labeled."""
+    import matplotlib.pyplot as plt
+    win = _windows(levels)
+    rows = _all_series(levels, bench)
+    y_start, end = win["1Y"]
+
+    # ---- Main table: everything trailing 1 year ----
+    cols = ["1Y return", "1Y ann vol", "1Y max DD", "peak to trough (1Y)"]
+    cell, colr = [], []
+    for name, s in rows:
+        r1 = _ret(s, y_start)
+        v1 = _ann_vol(s.loc[y_start:])
+        mdd, pk, tr, _ = _max_dd(s, since=y_start)
+        window = f"{pk.date()} to {tr.date()}" if pk is not None else "n/a"
+        cell.append([f"{r1:+.1%}", f"{v1:.1%}", f"{mdd:.1%}", window])
+        colr.append(["#e2f0e2" if r1 >= 0 else "#fde0e0", "white",
+                     "#fde0e0", "white"])
+    fig, ax = plt.subplots(figsize=(11, 0.7 + 0.42 * len(rows)))
+    ax.axis("off")
+    ax.set_title("CTIF trailing 1-year performance, total return", pad=20,
+                 fontsize=14)
+    ax.text(0.5, 1.015,
+            f"All figures cover {y_start.date()} to {end.date()} "
+            "(one consistent window).",
+            transform=ax.transAxes, ha="center", va="bottom",
+            fontsize=9, color="0.35")
+    t = ax.table(cellText=cell, rowLabels=[n for n, _ in rows],
+                 colLabels=cols, cellColours=colr, cellLoc="center",
+                 loc="center")
+    t.auto_set_font_size(False); t.set_fontsize(10.5); t.scale(1, 1.55)
+    for (ri, ci), c in t.get_celld().items():
+        if ri == 0 or ci == -1:
+            c.set_text_props(weight="bold")
+        if ri == 1:
+            c.set_text_props(weight="bold")
+    fig.tight_layout()
+
+    # ---- Separate since-inception table (clearly labeled, not mixed in) ----
+    icols = ["Return", "Ann vol", "Max DD", "peak to trough"]
+    icell = []
+    for name, s in rows:
+        rf = _ret(s, win["Full"][0])
+        vf = _ann_vol(s)
+        mdd, pk, tr, rec = _max_dd(s)
+        window = f"{pk.date()} to {tr.date()}" if pk is not None else "n/a"
+        icell.append([f"{rf:+.1%}", f"{vf:.1%}", f"{mdd:.1%}", window])
+    figi, axi = plt.subplots(figsize=(11, 0.7 + 0.42 * len(rows)))
+    axi.axis("off")
+    axi.set_title("CTIF since inception (context only, different window)",
+                  pad=20, fontsize=14)
+    axi.text(0.5, 1.015,
+             f"All figures cover {win['Full'][0].date()} to {end.date()}. "
+             "Drawdowns here include the 2022 bear market.",
+             transform=axi.transAxes, ha="center", va="bottom",
+             fontsize=9, color="0.35")
+    ti = axi.table(cellText=icell, rowLabels=[n for n, _ in rows],
+                   colLabels=icols, cellLoc="center", loc="center")
+    ti.auto_set_font_size(False); ti.set_fontsize(10.5); ti.scale(1, 1.55)
+    for (ri, ci), c in ti.get_celld().items():
+        if ri == 0 or ci == -1:
+            c.set_text_props(weight="bold")
+        if ri == 1:
+            c.set_text_props(weight="bold")
+    figi.tight_layout()
+
+
 def print_summary(levels, bench):
-    end = levels.index[-1]
-    start = end - pd.Timedelta(days=365)
-
-    def ret(s):
-        s = s.loc[start:].dropna()
-        return s.iloc[-1] / s.iloc[0] - 1.0 if len(s) > 1 else np.nan
-
-    print("\n" + "=" * 46)
-    print(f"Trailing 1-year total return (as of {end.date()})")
-    print("=" * 46)
-    labels = {"CTIF-X-TR": "CTIF Composite", "CTIF-B-TR": "  Builders",
-              "CTIF-C-TR": "  Components", "CTIF-R-TR": "  Resources"}
-    for col, lab in labels.items():
-        print(f"{lab:<18} {ret(levels[col]):+8.2%}")
-    for b in bench.columns:
-        print(f"{b:<18} {ret(bench[b]):+8.2%}")
-    print("=" * 46)
-    print("Reminder: back-cast, hindsight-selected universe. The gap vs")
-    print("SPY is mostly selection. Compare Components to SMH and")
-    print("Resources to XLU for a fairer read.\n")
-
+    win = _windows(levels)
+    rows = _all_series(levels, bench)
+    y_start, end = win["1Y"]
+    print("\n" + "=" * 84)
+    print("CTIF trailing 1-year performance, total return")
+    print(f"  window: {y_start.date()} to {end.date()} (one consistent "
+          "window for every column)")
+    print("=" * 84)
+    print(f"{'Series':<16}{'1Y ret':>9}{'1Y vol':>9}{'1Y maxDD':>10}   "
+          f"{'peak to trough (1Y)':<26}")
+    print("-" * 84)
+    for name, s in rows:
+        r1 = _ret(s, y_start)
+        v1 = _ann_vol(s.loc[y_start:])
+        mdd, pk, tr, _ = _max_dd(s, since=y_start)
+        window = f"{pk.date()} to {tr.date()}" if pk is not None else "n/a"
+        print(f"{name:<16}{r1:>+9.1%}{v1:>9.1%}{mdd:>+10.1%}   "
+              f"{window:<26}")
+    print("=" * 84)
+    print("Back-cast, hindsight-selected universe. The gap vs SPY is mostly")
+    print("selection; the fair read is sleeve vs sector benchmark (Components")
+    print("vs SMH, Resources vs XLU). A separate since-2022 table is shown")
+    print("for context; its drawdowns include the 2022 bear market.\n")
 
 # ---------------------------------------------------------------------------
 def main():
