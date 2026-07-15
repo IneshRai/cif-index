@@ -1,0 +1,26 @@
+ticker,company_name,candidate_sleeve,reason_on_watchlist
+CRWV,CoreWeave,SATELLITE,Neocloud GPU landlord; blurs into being an AI company; crypto-adjacent volatility; track as separate satellite series not in core composite
+NBIS,Nebius Group,SATELLITE,Neocloud; same rationale as CoreWeave
+APLD,Applied Digital,SATELLITE,Converted miner turned AI data center operator; verify current listing and business mix before any inclusion
+IREN,IREN Limited,SATELLITE,Bitcoin miner with AI compute pivot; satellite series only
+CIFR,Cipher Mining,SATELLITE,Bitcoin miner with AI hosting pivot; satellite series only
+WULF,TeraWulf,SATELLITE,Bitcoin miner with AI hosting pivot; satellite series only
+JCI,Johnson Controls,BUILDERS,Large diversified building products; data center share of revenue too low for purity standard
+CARR,Carrier Global,BUILDERS,Diversified HVAC; data center cooling a minority of revenue
+TT,Trane Technologies,BUILDERS,Diversified HVAC; data center cooling a minority of revenue
+EMR,Emerson Electric,BUILDERS,Diversified automation; DC exposure indirect
+CMI,Cummins,BUILDERS,Backup generation exposure real but engines revenue mostly non-DC
+AME,AMETEK,BUILDERS,Diversified instruments; DC share low
+GNRC,Generac,BUILDERS,Backup power; mostly residential and light commercial
+PRIM,Primoris Services,BUILDERS,Power delivery EPC; candidate for addition at a quarterly review after revenue linkage check
+AAON,AAON,BUILDERS,Data center cooling growing off a small base; revisit
+DY,Dycom Industries,BUILDERS,Fiber construction; telecom weighted rather than DC weighted
+JBL,Jabil,COMPONENTS,Large DC segment inside diversified EMS; purity borderline
+FLEX,Flex,COMPONENTS,DC power and integration inside diversified EMS; purity borderline
+VICR,Vicor,COMPONENTS,Power modules for AI boards; small cap and customer concentration
+RMBS,Rambus,COMPONENTS,Memory interface silicon; revisit
+UEC,Uranium Energy,RESOURCES,Uranium developer; pre-cash-flow profile; NLR/URA style exposure
+NXE,NexGen Energy,RESOURCES,Uranium developer; pre-production
+WMB,Williams Companies,RESOURCES,Gas midstream with DC-linked power projects; adds a fuel leg if desired
+KMI,Kinder Morgan,RESOURCES,Gas midstream; same rationale as WMB
+EQT,EQT Corporation,RESOURCES,Gas producer; furthest from the theme; only if a fuel leg is added

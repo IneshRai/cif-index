@@ -1,0 +1,26 @@
+# API data cache and downloaded prices (never commit; may reveal holdings/usage)
+ctif_cache/
+data/
+*_px.csv
+*_sh.csv
+
+# generated outputs
+output/
+demo_synthetic/
+ctif_levels.csv
+*.png
+dashboard.html
+weekly_report.md
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# pycharm
+.idea/
+
+# os
+.DS_Store

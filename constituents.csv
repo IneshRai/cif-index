@@ -1,0 +1,54 @@
+ticker,company_name,sleeve,category,add_date,notes
+FIX,Comfort Systems USA,BUILDERS,Mechanical and electrical construction,2022-01-03,Data center mechanical/electrical contractor; large modular and technology end market
+EME,EMCOR Group,BUILDERS,Mechanical and electrical construction,2022-01-03,Electrical and mechanical construction; data centers among largest end markets
+PWR,Quanta Services,BUILDERS,Grid and power infrastructure services,2022-01-03,Electric power and grid infrastructure buildout; transmission is the binding constraint for DC power delivery
+MTZ,MasTec,BUILDERS,Infrastructure construction,2022-01-03,Power delivery and clean energy infrastructure construction
+STRL,Sterling Infrastructure,BUILDERS,Site development,2022-01-03,E-infrastructure segment; data center site work and shell development
+IESC,IES Holdings,BUILDERS,Electrical contracting,2022-01-03,Communications segment builds data center electrical systems
+AGX,Argan,BUILDERS,Power plant EPC,2022-01-03,Gas-fired and renewable power plant engineering and construction via Gemma Power
+VRT,Vertiv Holdings,BUILDERS,Power and cooling equipment,2022-01-03,Critical digital infrastructure: power management thermal management and racks
+ETN,Eaton,BUILDERS,Electrical equipment,2022-01-03,Electrical power distribution for data centers; large DC backlog
+HUBB,Hubbell,BUILDERS,Electrical equipment,2022-01-03,Utility and electrical solutions; grid modernization exposure
+NVT,nVent Electric,BUILDERS,Electrical enclosures and cooling,2022-01-03,Electrical connection and protection; liquid cooling solutions
+MOD,Modine Manufacturing,BUILDERS,Thermal management,2022-01-03,Data center cooling segment; air and liquid cooling systems
+POWL,Powell Industries,BUILDERS,Electrical switchgear,2022-01-03,Custom switchgear and electrical distribution equipment; growing DC orders
+GEV,GE Vernova,BUILDERS,Power generation equipment and grid,2024-04-02,Gas turbines grid equipment and electrification; spun off from GE April 2024; enters at first eligible rebalance per seasoning rule
+MU,Micron Technology,COMPONENTS,Memory,2022-01-03,DRAM and HBM; HBM is a direct AI compute input
+SNDK,Sandisk,COMPONENTS,NAND flash storage,2025-02-24,NAND flash; spun off from Western Digital February 2025; enters at first eligible rebalance per seasoning rule
+WDC,Western Digital,COMPONENTS,Hard disk storage,2022-01-03,HDD for hyperscale nearline storage post SanDisk separation
+STX,Seagate Technology Holdings,COMPONENTS,Hard disk storage,2022-01-03,HDD mass capacity storage for cloud and AI data lakes
+AVGO,Broadcom,COMPONENTS,Networking silicon and custom accelerators,2022-01-03,Custom AI accelerators (XPU) and merchant networking silicon; largest name in family; 10 percent cap binds
+MRVL,Marvell Technology,COMPONENTS,Networking silicon and custom accelerators,2022-01-03,Custom silicon electro-optics and interconnect for AI data centers
+ANET,Arista Networks,COMPONENTS,Networking systems,2022-01-03,Data center switching; hyperscale AI networking
+APH,Amphenol,COMPONENTS,Connectors and interconnect,2022-01-03,Connectors cable assemblies and interconnect into IT datacom
+ALAB,Astera Labs,COMPONENTS,Connectivity silicon,2024-03-20,PCIe CXL and Ethernet connectivity for AI servers; IPO March 2024; enters at first eligible rebalance per seasoning rule
+CRDO,Credo Technology Group,COMPONENTS,Connectivity silicon,2022-01-27,Active electrical cables SerDes and optical DSP for AI clusters; IPO January 2022; enters at first eligible rebalance per seasoning rule
+COHR,Coherent,COMPONENTS,Optical components,2022-01-03,Optical transceivers and datacom optics
+LITE,Lumentum Holdings,COMPONENTS,Optical components,2022-01-03,Optical transceivers and photonics for cloud and AI
+CIEN,Ciena,COMPONENTS,Optical networking,2022-01-03,Optical transport and data center interconnect
+FN,Fabrinet,COMPONENTS,Optical manufacturing,2022-01-03,Contract manufacturer of optical modules including 800G for AI networking
+MPWR,Monolithic Power Systems,COMPONENTS,Power semiconductors,2022-01-03,Power management silicon including vertical power for AI accelerator boards
+DELL,Dell Technologies,COMPONENTS,Servers and systems,2022-01-03,AI server franchise; ISG segment
+HPE,Hewlett Packard Enterprise,COMPONENTS,Servers and systems,2022-01-03,AI systems and networking; includes Juniper following 2025 acquisition
+SMCI,Super Micro Computer,COMPONENTS,Servers and systems,2022-01-03,AI server and rack scale integration; direct liquid cooling
+CLS,Celestica,COMPONENTS,Systems ODM,2022-01-03,Hyperscaler networking and storage hardware ODM
+GLW,Corning,COMPONENTS,Optical fiber,2022-01-03,Optical fiber and connectivity for AI data center interconnect
+VST,Vistra,RESOURCES,Merchant power,2022-01-03,Merchant generation fleet including nuclear via Energy Harbor
+CEG,Constellation Energy,RESOURCES,Merchant power,2022-02-02,Largest US nuclear fleet; hyperscaler PPAs; spun off from Exelon February 2022; enters at first eligible rebalance per seasoning rule
+NRG,NRG Energy,RESOURCES,Merchant power,2022-01-03,Merchant generation and retail; data center power agreements
+TLN,Talen Energy,RESOURCES,Merchant power,2024-01-03,Nuclear and gas generation; hyperscaler campus deals; relisted 2024; enters at first eligible rebalance per seasoning rule
+PEG,Public Service Enterprise Group,RESOURCES,Regulated utility with nuclear,2022-01-03,New Jersey utility with nuclear fleet; data center interconnection pipeline
+D,Dominion Energy,RESOURCES,Regulated utility,2022-01-03,Serves Northern Virginia the largest data center market in the world
+AEP,American Electric Power,RESOURCES,Regulated utility,2022-01-03,Large transmission footprint; substantial contracted data center load growth
+SO,Southern Company,RESOURCES,Regulated utility,2022-01-03,Southeast utility with nuclear (Vogtle) and large DC load pipeline
+ETR,Entergy,RESOURCES,Regulated utility,2022-01-03,Gulf South utility; hyperscale campus load additions
+EXC,Exelon,RESOURCES,Regulated utility,2022-01-03,Transmission and distribution utility serving mid-Atlantic data center corridors
+CCJ,Cameco,RESOURCES,Uranium and nuclear fuel,2022-01-03,Uranium production and Westinghouse stake; NYSE listed
+BWXT,BWX Technologies,RESOURCES,Nuclear components,2022-01-03,Nuclear reactor components and government nuclear operations
+OKLO,Oklo,RESOURCES,Advanced nuclear,2024-05-10,Fast reactor developer with data center power agreements; listed May 2024; enters at first eligible rebalance per seasoning rule
+SMR,NuScale Power,RESOURCES,Small modular reactors,2022-05-03,SMR technology licensor; listed May 2022; enters at first eligible rebalance per seasoning rule
+LEU,Centrus Energy,RESOURCES,Uranium enrichment,2022-01-03,HALEU and LEU enrichment; domestic fuel supply chain
+BE,Bloom Energy,RESOURCES,Onsite power,2022-01-03,Fuel cell systems for onsite and islanded data center power
+EQIX,Equinix,RESOURCES,Data center REIT,2022-01-03,Global colocation and interconnection REIT
+DLR,Digital Realty Trust,RESOURCES,Data center REIT,2022-01-03,Hyperscale and colocation data center REIT
+IRM,Iron Mountain,RESOURCES,Data center REIT,2022-01-03,Data center segment growing within records management REIT
