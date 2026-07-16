@@ -587,7 +587,7 @@ def print_summary(levels, bench):
 
 # ---------------------------------------------------------------------------
 def main():
-    if API_KEY == "REDACTED":
+    if API_KEY == "PUT_YOUR_ALPHAVANTAGE_KEY_HERE":
         print("Set API_KEY at the top of the file first.")
         sys.exit(1)
     print("Loading data (first run downloads and caches; later runs are "
