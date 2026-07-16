@@ -21,6 +21,7 @@ levels overstate what was achievable. The value here is the signals
 benchmark reads, not the headline return.
 """
 
+import json
 import os
 
 import numpy as np
@@ -32,6 +33,9 @@ import ctif_run as cif
 
 st.set_page_config(page_title="CIF Monitor", layout="wide",
                    initial_sidebar_state="expanded")
+
+SNAP = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                    "data_snapshot")
 
 SLEEVE_CODE = {"Composite": "CIF-X", "Builders": "CIF-B",
                "Components": "CIF-C", "Resources": "CIF-R"}
@@ -46,22 +50,46 @@ WINDOWS = {"1M": 21, "3M": 63, "6M": 126, "1Y": 252, "Max": None}
 # ---------------------------------------------------------------------------
 # Data loading (cached)
 # ---------------------------------------------------------------------------
-@st.cache_data(show_spinner="Loading prices and computing index...")
-def load_everything():
+def _have_snapshot():
+    return os.path.exists(os.path.join(SNAP, "index_levels.csv"))
+
+
+@st.cache_data(show_spinner="Loading snapshot...")
+def load_from_snapshot():
+    levels = pd.read_csv(os.path.join(SNAP, "index_levels.csv"),
+                         index_col=0, parse_dates=True)
+    bench = pd.read_csv(os.path.join(SNAP, "bench.csv"),
+                        index_col=0, parse_dates=True)
+    adj = pd.read_csv(os.path.join(SNAP, "adj.csv"),
+                      index_col=0, parse_dates=True)
+    weights = {}
+    for sleeve in cif.SLEEVES:
+        weights[sleeve] = pd.read_csv(
+            os.path.join(SNAP, f"weights_{sleeve.lower()}.csv"),
+            index_col=0, parse_dates=True)
+    with open(os.path.join(SNAP, "meta.json")) as f:
+        meta = json.load(f)
+    return levels, weights, bench, adj, meta
+
+
+@st.cache_data(show_spinner="Loading prices and computing index (live)...")
+def load_live():
     px, shares = cif.load_all()
     levels, weights = cif.compute_index(px, shares, return_weights=True)
     bench = cif.benchmark_tr(px, levels.index)
-    # per-ticker adjusted-close frame on the index calendar
-    adj = {}
-    for t, _ in cif.CONSTITUENTS:
-        if t in px:
-            adj[t] = px[t]["adj_close"].reindex(levels.index).ffill()
-    adj = pd.DataFrame(adj)
-    sleeve_of = {t: s for t, s in cif.CONSTITUENTS}
-    return levels, weights, bench, adj, sleeve_of
+    adj = pd.DataFrame({t: px[t]["adj_close"].reindex(levels.index).ffill()
+                        for t, _ in cif.CONSTITUENTS if t in px})
+    meta = {"asof": str(levels.index[-1].date()),
+            "sleeve_of": {t: s for t, s in cif.CONSTITUENTS if t in px}}
+    return levels, weights, bench, adj, meta
 
 
 def key_ready():
+    try:
+        if "ALPHAVANTAGE_API_KEY" in st.secrets:
+            cif.API_KEY = st.secrets["ALPHAVANTAGE_API_KEY"]
+    except Exception:
+        pass
     env = os.environ.get("ALPHAVANTAGE_API_KEY")
     if env:
         cif.API_KEY = env
@@ -114,16 +142,23 @@ def pct(x, signed=True):
 def main():
     st.title("CIF Monitor")
     st.caption("Castellan Infrastructure Family. A monitoring instrument for "
-               "the AI buildout supply chain.")
+               "the AI buildout supply chain, not a strategy. Back-cast is "
+               "hindsight-selected: watch the signals, not the headline "
+               "return.")
 
-    if not key_ready():
-        st.warning("No Alpha Vantage API key found. Set API_KEY in "
-                   "ctif_run.py or the ALPHAVANTAGE_API_KEY environment "
-                   "variable, then reload.")
+    use_snapshot = _have_snapshot()
+    if not use_snapshot and not key_ready():
+        st.warning("No data snapshot found and no Alpha Vantage API key set. "
+                   "Either run refresh_data.py to build a snapshot, or set "
+                   "API_KEY in ctif_run.py / the ALPHAVANTAGE_API_KEY "
+                   "environment variable for a live pull.")
         st.stop()
 
     try:
-        levels, weights, bench, adj, sleeve_of = load_everything()
+        if use_snapshot:
+            levels, weights, bench, adj, meta = load_from_snapshot()
+        else:
+            levels, weights, bench, adj, meta = load_live()
     except Exception as exc:
         st.error(f"Failed to load or compute: {exc}")
         st.stop()
@@ -143,8 +178,10 @@ def main():
     if st.sidebar.button("Refresh data (clear cache)"):
         st.cache_data.clear()
         st.rerun()
-    st.sidebar.caption(f"Data through {asof.date()}. Cache reused between "
-                       "runs; refresh to re-pull.")
+    src = "daily snapshot" if use_snapshot else "live pull"
+    st.sidebar.caption(f"Source: {src}. Data through {asof.date()}. "
+                       "Snapshot refreshes via the scheduled job; use Refresh "
+                       "to reload it.")
 
     start = window_slice(idx, win)
 
