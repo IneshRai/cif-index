@@ -114,9 +114,7 @@ def pct(x, signed=True):
 def main():
     st.title("CIF Monitor")
     st.caption("Castellan Infrastructure Family. A monitoring instrument for "
-               "the AI buildout supply chain, not a strategy. Back-cast is "
-               "hindsight-selected: watch the signals, not the headline "
-               "return.")
+               "the AI buildout supply chain.")
 
     if not key_ready():
         st.warning("No Alpha Vantage API key found. Set API_KEY in "
