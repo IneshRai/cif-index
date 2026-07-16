@@ -1,11 +1,11 @@
 """
-ctif_run.py  -  Castellan Technology Infrastructure Family, one-file runner
+ctif_run.py  -  Castellan Infrastructure Family, one-file runner
 ============================================================================
 
 Drop this into a PyCharm project, set your Alpha Vantage key below, and run.
 It fetches real prices for the 53 constituents plus benchmarks, caches them
 locally (so re-runs are instant and do not burn API calls), computes the
-index per the CTIF methodology, and shows matplotlib charts including a
+index per the CIF methodology, and shows matplotlib charts including a
 1-year comparison against SPY, QQQ, SMH, and XLU.
 
 This single file mirrors the validated multi-file engine for convenience.
@@ -19,13 +19,13 @@ IMPORTANT: index history is a BACK-CAST. The universe is selected with
 hindsight (2026's known buildout winners), so it will tend to look like it
 beat the market by a wide margin. That gap is mostly selection, not skill.
 The sleeve-versus-sector-benchmark comparisons (Components vs SMH, Resources
-vs XLU) are more informative than the headline CTIF-vs-SPY line.
+vs XLU) are more informative than the headline CIF-vs-SPY line.
 """
 
 # ===========================================================================
 # CONFIG  -  edit these two lines
 # ===========================================================================
-API_KEY = "REDACTED"
+API_KEY = "PUT_YOUR_ALPHAVANTAGE_KEY_HERE"
 CACHE_DIR = "ctif_cache"          # local folder for downloaded CSVs
 
 BASE_DATE = "2022-01-03"
@@ -243,6 +243,7 @@ def run_sleeve(members, pr, tr, sa, shares, spans, calendar, schedule,
     w = targets(schedule[0][0], base)
     start = calendar.get_loc(base)
     dates, lv_pr, lv_tr = [base], [100.0], [100.0]
+    wt_rows = {base: w.copy()}
     for pos in range(start + 1, len(calendar)):
         day = calendar[pos]
         rp, rt = pr.loc[day, w.index], tr.loc[day, w.index]
@@ -260,11 +261,15 @@ def run_sleeve(members, pr, tr, sa, shares, spans, calendar, schedule,
             nt = targets(eff_map[day], day)
             if nt is not None:
                 w = nt
-    return pd.DataFrame({"PR": lv_pr, "TR": lv_tr},
-                        index=pd.DatetimeIndex(dates))
+        wt_rows[day] = w.copy()
+    levels = pd.DataFrame({"PR": lv_pr, "TR": lv_tr},
+                          index=pd.DatetimeIndex(dates))
+    weights = pd.DataFrame(wt_rows).T.sort_index()
+    weights.index.name = "date"
+    return levels, weights
 
 
-def compute_index(px, shares):
+def compute_index(px, shares, return_weights=False):
     pr_map, tr_map, sa_map, spans = {}, {}, {}, {}
     for t, _ in CONSTITUENTS:
         if t not in px:
@@ -280,18 +285,20 @@ def compute_index(px, shares):
     base = snap(pd.Timestamp(BASE_DATE), cal)
     sched = rebalance_schedule(cal, base)
 
-    out = {}
+    out, weights = {}, {}
     for sleeve in SLEEVES:
         members = [t for t, s in CONSTITUENTS if s == sleeve and t in pr_map]
-        lv = run_sleeve(members, pr, tr, sa, shares, spans, cal, sched, base)
-        out[f"CTIF-{sleeve[0]}-PR"] = lv["PR"]
-        out[f"CTIF-{sleeve[0]}-TR"] = lv["TR"]
+        lv, wt = run_sleeve(members, pr, tr, sa, shares, spans, cal, sched,
+                            base)
+        out[f"CIF-{sleeve[0]}-PR"] = lv["PR"]
+        out[f"CIF-{sleeve[0]}-TR"] = lv["TR"]
+        weights[sleeve] = wt
     levels = pd.DataFrame(out)
 
     # equal-thirds composite, reset quarterly, drift on sleeve PR between
     for ver in ("PR", "TR"):
-        cols = [f"CTIF-{s[0]}-{ver}" for s in SLEEVES]
-        pr_cols = [f"CTIF-{s[0]}-PR" for s in SLEEVES]
+        cols = [f"CIF-{s[0]}-{ver}" for s in SLEEVES]
+        pr_cols = [f"CIF-{s[0]}-PR" for s in SLEEVES]
         rets = levels[cols].pct_change()
         pr_rets = levels[pr_cols].pct_change()
         eff_days = {e for _, e in sched}
@@ -305,7 +312,9 @@ def compute_index(px, shares):
             w = grown / grown.sum()
             if levels.index[i] in eff_days:
                 w = np.array([1 / 3, 1 / 3, 1 / 3])
-        levels[f"CTIF-X-{ver}"] = comp
+        levels[f"CIF-X-{ver}"] = comp
+    if return_weights:
+        return levels, weights
     return levels
 
 
@@ -375,13 +384,13 @@ def _max_dd(s, since=None):
 
 # Distinct colors for on-screen readability.
 COLORS = {
-    "CTIF Composite": "#111111", "Composite": "#111111",
+    "CIF Composite": "#111111", "Composite": "#111111",
     "Builders": "#1f77b4", "Components": "#d62728", "Resources": "#2ca02c",
     "SPY": "#7f7f7f", "QQQ": "#9467bd", "SMH": "#ff7f0e", "XLU": "#17becf",
 }
 
-SERIES_ROWS = [("CTIF-X", "CTIF Composite"), ("CTIF-B", "Builders"),
-               ("CTIF-C", "Components"), ("CTIF-R", "Resources")]
+SERIES_ROWS = [("CIF-X", "CIF Composite"), ("CIF-B", "Builders"),
+               ("CIF-C", "Components"), ("CIF-R", "Resources")]
 
 
 def make_charts(levels, bench):
@@ -397,8 +406,8 @@ def make_charts(levels, bench):
             plt.rcParams["font.family"] = cand
             break
 
-    ctif = [("CTIF-X", "Composite", 2.6), ("CTIF-B", "Builders", 1.6),
-            ("CTIF-C", "Components", 1.6), ("CTIF-R", "Resources", 1.6)]
+    ctif = [("CIF-X", "Composite", 2.6), ("CIF-B", "Builders", 1.6),
+            ("CIF-C", "Components", 1.6), ("CIF-R", "Resources", 1.6)]
 
     # 1) Full history, TR
     fig1, ax = plt.subplots(figsize=(11, 6))
@@ -406,7 +415,7 @@ def make_charts(levels, bench):
         s = levels[f"{code}-TR"].dropna()
         ax.plot(s.index, s.values, color=COLORS[name], linewidth=lw,
                 label=name)
-    ax.set_title("CTIF index family, total return "
+    ax.set_title("CIF index family, total return "
                  f"({levels.index[0].date()} = 100, "
                  f"through {levels.index[-1].date()})")
     ax.set_ylabel("Index level")
@@ -423,9 +432,9 @@ def make_charts(levels, bench):
 
     # 2) Trailing 1 year: composite + benchmarks
     fig2, ax2 = plt.subplots(figsize=(11, 6))
-    c = rebased(levels["CTIF-X-TR"])
+    c = rebased(levels["CIF-X-TR"])
     ax2.plot(c.index, c.values, color=COLORS["Composite"], linewidth=2.8,
-             label="CTIF Composite")
+             label="CIF Composite")
     for b in bench.columns:
         s = rebased(bench[b])
         if len(s):
@@ -440,9 +449,9 @@ def make_charts(levels, bench):
 
     # 3) Trailing 1 year: composite + sleeves vs sector benchmarks
     fig3, ax3 = plt.subplots(figsize=(11, 6))
-    cx = rebased(levels["CTIF-X-TR"])
+    cx = rebased(levels["CIF-X-TR"])
     ax3.plot(cx.index, cx.values, color=COLORS["Composite"], linewidth=2.8,
-             label="CTIF Composite")
+             label="CIF Composite")
     for code, name, _ in ctif[1:]:
         s = rebased(levels[f"{code}-TR"])
         ax3.plot(s.index, s.values, color=COLORS[name], linewidth=2.0,
@@ -504,7 +513,7 @@ def make_table_figures(levels, bench):
                      "#fde0e0", "white"])
     fig, ax = plt.subplots(figsize=(11, 0.7 + 0.42 * len(rows)))
     ax.axis("off")
-    ax.set_title("CTIF trailing 1-year performance, total return", pad=20,
+    ax.set_title("CIF trailing 1-year performance, total return", pad=20,
                  fontsize=14)
     ax.text(0.5, 1.015,
             f"All figures cover {y_start.date()} to {end.date()} "
@@ -533,7 +542,7 @@ def make_table_figures(levels, bench):
         icell.append([f"{rf:+.1%}", f"{vf:.1%}", f"{mdd:.1%}", window])
     figi, axi = plt.subplots(figsize=(11, 0.7 + 0.42 * len(rows)))
     axi.axis("off")
-    axi.set_title("CTIF since inception (context only, different window)",
+    axi.set_title("CIF since inception (context only, different window)",
                   pad=20, fontsize=14)
     axi.text(0.5, 1.015,
              f"All figures cover {win['Full'][0].date()} to {end.date()}. "
@@ -556,7 +565,7 @@ def print_summary(levels, bench):
     rows = _all_series(levels, bench)
     y_start, end = win["1Y"]
     print("\n" + "=" * 84)
-    print("CTIF trailing 1-year performance, total return")
+    print("CIF trailing 1-year performance, total return")
     print(f"  window: {y_start.date()} to {end.date()} (one consistent "
           "window for every column)")
     print("=" * 84)
@@ -578,7 +587,7 @@ def print_summary(levels, bench):
 
 # ---------------------------------------------------------------------------
 def main():
-    if API_KEY == "PUT_YOUR_ALPHAVANTAGE_KEY_HERE":
+    if API_KEY == "REDACTED":
         print("Set API_KEY at the top of the file first.")
         sys.exit(1)
     print("Loading data (first run downloads and caches; later runs are "
