@@ -1,4 +1,4 @@
-# CTIF: Castellan Technology Infrastructure Family
+# CIF: Castellan Technology Infrastructure Family
 
 A proprietary index family measuring the AI buildout supply chain: the
 companies that construct, equip, connect, power, and house data centers,
