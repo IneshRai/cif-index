@@ -1,0 +1,40 @@
+name: Refresh CIF data
+
+on:
+  schedule:
+    # 23:30 UTC on weekdays = after the US market close (adjust if you like)
+    - cron: '30 23 * * 1-5'
+  workflow_dispatch: {}   # lets you run it manually from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Refresh data snapshot
+        env:
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+        run: python refresh_data.py
+
+      - name: Commit snapshot if changed
+        run: |
+          git config user.name "cif-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data_snapshot
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Daily data refresh $(date -u +%Y-%m-%d)"
+            git push
+          fi
