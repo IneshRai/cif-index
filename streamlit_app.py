@@ -142,9 +142,7 @@ def pct(x, signed=True):
 def main():
     st.title("CIF Monitor")
     st.caption("Castellan Infrastructure Family. A monitoring instrument for "
-               "the AI buildout supply chain, not a strategy. Back-cast is "
-               "hindsight-selected: watch the signals, not the headline "
-               "return.")
+               "the AI buildout supply chain.")
 
     use_snapshot = _have_snapshot()
     if not use_snapshot and not key_ready():
@@ -240,9 +238,6 @@ def main():
                                    if pk is not None else "n/a")})
         st.dataframe(pd.DataFrame(rows), use_container_width=True,
                      hide_index=True)
-        st.caption("Back-cast, hindsight-selected. The fair read is sleeve "
-                   "vs sector benchmark (Components vs SMH, Resources vs "
-                   "XLU), not composite vs SPY.")
 
     # ===================== SLEEVE DRILLDOWN =====================
     with tab_drill:
