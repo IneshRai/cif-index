@@ -18,13 +18,21 @@ In CI:     the workflow sets ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY
 
 import json
 import os
+import sys
 
 import pandas as pd
 
-import ctif_run as cif
+# This script lives in src/ but ctif_run.py and the data_snapshot the dashboard
+# reads both live at the repo root. Put the repo root on the path so the import
+# works no matter where the script is launched from, and write the snapshot
+# there so streamlit_app.py (also at the root) finds it.
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
-SNAP = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                    "data_snapshot")
+import ctif_run as cif  # noqa: E402
+
+SNAP = os.path.join(ROOT, "data_snapshot")
 
 
 def main():

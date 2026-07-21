@@ -44,6 +44,7 @@ ALPACA_API_SECRET_KEY = os.environ.get("ALPACA_API_SECRET_KEY", "PUT_YOUR_ALPACA
 CACHE_DIR = "ctif_cache"          # local folder for downloaded CSVs
 SHARES_FILE = "shares.csv"        # maintained shares outstanding (see fetch_shares.py)
 FEED = os.environ.get("CIF_FEED") or "iex"   # "iex" (free) or "sip" (paid)
+WEIGHTING = os.environ.get("CIF_WEIGHTING") or "cap"  # "cap" (needs shares.csv) or "equal"
 HISTORY_START = "2015-01-01"      # bar history start; CA data begins Apr 2020
 
 BASE_DATE = "2022-01-03"
@@ -337,6 +338,9 @@ def run_sleeve(members, pr, tr, sa, shares, spans, calendar, schedule,
                 elig.append(t)
         if not elig:
             return None
+        if WEIGHTING == "equal":
+            # No shares needed: equal weight across eligible names, capped.
+            return cap_weights(pd.Series(1.0, index=elig), cap)
         px = sa.loc[ref, elig]
         mcap = px * pd.Series({t: shares.get(t, np.nan) for t in elig})
         mcap = mcap.dropna()
