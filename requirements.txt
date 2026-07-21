@@ -4,3 +4,4 @@ requests>=2.31
 matplotlib>=3.7
 streamlit>=1.30
 plotly>=5.18
+yfinance>=0.2.40

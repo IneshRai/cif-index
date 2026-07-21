@@ -36,8 +36,6 @@ jobs:
           ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
           # Optional: set to "sip" if the repo has a paid Alpaca subscription.
           CIF_FEED: ${{ vars.CIF_FEED }}
-          # "equal" until shares.csv is populated; unset/"cap" for cap-weight.
-          CIF_WEIGHTING: ${{ vars.CIF_WEIGHTING }}
         run: |
           python src/refresh_data.py
 

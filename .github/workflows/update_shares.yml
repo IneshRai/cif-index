@@ -1,0 +1,48 @@
+name: Update shares outstanding (weekly)
+
+# Refreshes shares.csv from yfinance once a week. Kept separate from the daily
+# price refresh so a yfinance failure can never break the price snapshot. The
+# next daily refresh after this commits picks up the new shares and the index
+# weights update accordingly.
+
+on:
+  schedule:
+    # Mondays 12:30 UTC. Shares move slowly; weekly is plenty.
+    - cron: "30 12 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  shares:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Update shares.csv from yfinance
+        run: |
+          python src/update_shares.py --constituents constituents.csv --output shares.csv
+
+      - name: Commit shares.csv if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add shares.csv
+          if git diff --cached --quiet; then
+            echo "No shares changes."
+          else
+            git commit -m "Automated weekly shares.csv update (yfinance)"
+            git push
+          fi
