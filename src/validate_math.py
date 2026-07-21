@@ -20,8 +20,9 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import compute_index as ci
-import fetch_index_data as fid
+import fetch_index_data as fid  # noqa: F401  (kept for suite import stability)
 import fetch_shares as fsh
+import alpaca_source as az
 
 RESULTS = []
 
@@ -45,7 +46,7 @@ def approx(a, b, tol=1e-9):
 
 def make_frame(dates, close, div=None, split=None):
     """
-    Alpha Vantage style frame where adjusted_close is exactly consistent
+    Engine-schema frame where adjusted_close is exactly consistent
     with close, dividends, and splits (a correct vendor).
     """
     n = len(dates)
@@ -402,37 +403,49 @@ def test_calendar_helpers():
 
 
 def test_fetch_parsers():
-    day = {"1. open": "10", "2. high": "11", "3. low": "9",
-           "4. close": "10.5", "5. adjusted close": "10.5",
-           "6. volume": "1000", "7. dividend amount": "0.0",
-           "8. split coefficient": "1.0"}
-    day0 = dict(day, **{"4. close": "10.0", "5. adjusted close": "10.0"})
-    payload = {"Time Series (Daily)": {"2026-07-10": day,
-                                       "2026-07-09": day0}}
-    df = fid.parse_daily_adjusted(payload, "TST")
-    check("fetch parse: maps fields and sorts ascending",
-          list(df["close"]) == [10.0, 10.5]
-          and list(df.columns)[0] == "date")
+    # Alpaca raw daily bars (t, o, h, l, c, v). One plain day, one dividend
+    # ex-date, and one 2:1 forward-split ex-date.
+    raw = [
+        {"t": "2026-07-08T04:00:00Z", "o": 10, "h": 11, "l": 9, "c": 10.0, "v": 1000},
+        {"t": "2026-07-09T04:00:00Z", "o": 10, "h": 11, "l": 9, "c": 10.5, "v": 1200},
+        {"t": "2026-07-10T04:00:00Z", "o": 5,  "h": 6,  "l": 4, "c": 5.20, "v": 2400},
+    ]
+    # adjustment=all bars supply adjusted_close (arbitrary but monotone here)
+    adj = [
+        {"t": "2026-07-08T04:00:00Z", "c": 5.00},
+        {"t": "2026-07-09T04:00:00Z", "c": 5.25},
+        {"t": "2026-07-10T04:00:00Z", "c": 5.20},
+    ]
+    divs = {("TST", "2026-07-09"): 0.10}
+    splits = {("TST", "2026-07-10"): 2.0}  # new_rate/old_rate = 2/1
+    df = az.assemble_frame("TST", raw, adj, divs, splits)
+    check("alpaca assemble: schema columns present",
+          all(c in df.columns for c in
+              ("date", "open", "high", "low", "close", "adjusted_close",
+               "volume", "dividend_amount", "split_coefficient")))
+    check("alpaca assemble: sorted ascending by date, close mapped",
+          list(df["close"]) == [10.0, 10.5, 5.20])
+    idx = df.set_index("date")
+    cell = lambda d, c: float(idx.loc[pd.Timestamp(d), c])
+    check("alpaca assemble: dividend attached to ex-date only",
+          approx(cell("2026-07-09", "dividend_amount"), 0.10)
+          and approx(cell("2026-07-08", "dividend_amount"), 0.0))
+    check("alpaca assemble: split_coefficient attached to ex-date, else 1",
+          approx(cell("2026-07-10", "split_coefficient"), 2.0)
+          and approx(cell("2026-07-08", "split_coefficient"), 1.0))
+    check("alpaca assemble: adjusted_close mapped from adj feed",
+          approx(cell("2026-07-08", "adjusted_close"), 5.00))
+    # Split ex-date should be a zero-return price event under raw construction:
+    # (close * split) / prev_close - 1 = (5.20 * 2) / 10.5 - 1 ~ -0.0095, i.e.
+    # a real small move, not a spurious -50% from the raw halving.
+    pr, tr, sa = ci.build_ticker_series(df.set_index("date"), "TST", [])
+    check("alpaca assemble: split day is not a spurious -50% move",
+          pr.iloc[-1] > -0.10)
     try:
-        fid.parse_daily_adjusted({"Note": "rate limited"}, "TST")
-        check("fetch parse: throttle raises RuntimeError", False)
-    except RuntimeError:
-        check("fetch parse: throttle raises RuntimeError", True)
-    try:
-        fid.parse_daily_adjusted({"Error Message": "bad symbol"}, "TST")
-        check("fetch parse: bad symbol raises ValueError", False)
+        az.assemble_frame("TST", [], [], {}, {})
+        check("alpaca assemble: empty bars raises", False)
     except ValueError:
-        check("fetch parse: bad symbol raises ValueError", True)
-
-    shares, name = fsh.parse_overview(
-        {"SharesOutstanding": "123456789", "Name": "Test Co"}, "TST")
-    check("overview parse: shares outstanding extracted",
-          approx(shares, 123456789.0) and name == "Test Co")
-    try:
-        fsh.parse_overview({"Note": "rate limited"}, "TST")
-        check("overview parse: throttle raises RuntimeError", False)
-    except RuntimeError:
-        check("overview parse: throttle raises RuntimeError", True)
+        check("alpaca assemble: empty bars raises", True)
 
 
 def main():

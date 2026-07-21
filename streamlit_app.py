@@ -12,8 +12,9 @@ Run:
     streamlit run streamlit_app.py
 
 Data comes from the same local cache ctif_run.py builds, so if you have run
-ctif_run.py once, this loads instantly. Set your Alpha Vantage key in
-ctif_run.py (API_KEY) or the ALPHAVANTAGE_API_KEY environment variable.
+ctif_run.py once, this loads instantly. Set your Alpaca keys in ctif_run.py
+(ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY) or the matching environment
+variables / Streamlit secrets.
 
 Reminder shown throughout: the back-cast is hindsight-selected. Absolute
 levels overstate what was achievable. The value here is the signals
@@ -40,7 +41,7 @@ SNAP = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 SLEEVE_CODE = {"Composite": "CIF-X", "Builders": "CIF-B",
                "Components": "CIF-C", "Resources": "CIF-R"}
 SLEEVE_BENCH = {"Builders": "SPY", "Components": "SMH", "Resources": "XLU"}
-COLORS = {"Composite": "#111111", "Builders": "#1f77b4",
+COLORS = {"Composite": "#bfbfbf", "Builders": "#1f77b4",
           "Components": "#d62728", "Resources": "#2ca02c",
           "SPY": "#7f7f7f", "QQQ": "#9467bd", "SMH": "#ff7f0e",
           "XLU": "#17becf"}
@@ -85,15 +86,17 @@ def load_live():
 
 
 def key_ready():
-    try:
-        if "ALPHAVANTAGE_API_KEY" in st.secrets:
-            cif.API_KEY = st.secrets["ALPHAVANTAGE_API_KEY"]
-    except Exception:
-        pass
-    env = os.environ.get("ALPHAVANTAGE_API_KEY")
-    if env:
-        cif.API_KEY = env
-    return cif.API_KEY and cif.API_KEY != "PUT_YOUR_ALPHAVANTAGE_KEY_HERE"
+    for name in ("ALPACA_API_KEY_ID", "ALPACA_API_SECRET_KEY"):
+        try:
+            if name in st.secrets:
+                setattr(cif, name, st.secrets[name])
+        except Exception:
+            pass
+        env = os.environ.get(name)
+        if env:
+            setattr(cif, name, env)
+    return (not cif.ALPACA_API_KEY_ID.startswith("PUT_YOUR")
+            and not cif.ALPACA_API_SECRET_KEY.startswith("PUT_YOUR"))
 
 
 # ---------------------------------------------------------------------------
@@ -142,14 +145,16 @@ def pct(x, signed=True):
 def main():
     st.title("CIF Monitor")
     st.caption("Castellan Infrastructure Family. A monitoring instrument for "
-               "the AI buildout supply chain.")
+               "the AI buildout supply chain, not a strategy. Back-cast is "
+               "hindsight-selected: watch the signals, not the headline "
+               "return.")
 
     use_snapshot = _have_snapshot()
     if not use_snapshot and not key_ready():
-        st.warning("No data snapshot found and no Alpha Vantage API key set. "
+        st.warning("No data snapshot found and no Alpaca API keys set. "
                    "Either run refresh_data.py to build a snapshot, or set "
-                   "API_KEY in ctif_run.py / the ALPHAVANTAGE_API_KEY "
-                   "environment variable for a live pull.")
+                   "ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY (env vars or "
+                   "Streamlit secrets) for a live pull.")
         st.stop()
 
     try:
@@ -238,6 +243,9 @@ def main():
                                    if pk is not None else "n/a")})
         st.dataframe(pd.DataFrame(rows), use_container_width=True,
                      hide_index=True)
+        st.caption("Back-cast, hindsight-selected. The fair read is sleeve "
+                   "vs sector benchmark (Components vs SMH, Resources vs "
+                   "XLU), not composite vs SPY.")
 
     # ===================== SLEEVE DRILLDOWN =====================
     with tab_drill:
@@ -344,7 +352,8 @@ def main():
             disp = daily.std(axis=1).rolling(21).mean().loc[start:] * 100
             dfig.add_trace(go.Scatter(x=disp.index, y=disp.values,
                                       name=sleeve,
-                                      line=dict(color=COLORS[sleeve])))
+                                      line=dict(color=COLORS[sleeve],
+                                                width=2.2)))
         dfig.update_layout(height=340, hovermode="x unified",
                            margin=dict(l=10, r=10, t=10, b=10),
                            legend=dict(orientation="h", y=1.02),
@@ -359,7 +368,9 @@ def main():
             s = levels[f"{SLEEVE_CODE[name]}-{ver}"]
             mom = (s / s.shift(63) - 1.0).loc[start:] * 100
             mfig.add_trace(go.Scatter(x=mom.index, y=mom.values, name=name,
-                                      line=dict(color=COLORS[name])))
+                                      line=dict(color=COLORS[name],
+                                                width=3 if name == "Composite"
+                                                else 2.0)))
         mfig.add_hline(y=0, line_dash="dot", line_color="#888")
         mfig.update_layout(height=340, hovermode="x unified",
                            margin=dict(l=10, r=10, t=10, b=10),

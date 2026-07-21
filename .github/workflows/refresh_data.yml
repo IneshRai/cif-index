@@ -1,10 +1,14 @@
-name: Refresh CIF data
+name: Refresh CIF data snapshot
+
+# Daily unattended refresh after the US close. Fetches prices and corporate
+# actions from Alpaca, recomputes the index, and commits the snapshot the
+# Streamlit dashboard reads. No API keys are needed at view time.
 
 on:
   schedule:
-    # 23:30 UTC on weekdays = after the US market close (adjust if you like)
-    - cron: '30 23 * * 1-5'
-  workflow_dispatch: {}   # lets you run it manually from the Actions tab
+    # 22:15 UTC on weekdays (~5:15pm ET, after the close). Adjust as needed.
+    - cron: "15 22 * * 1-5"
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -13,28 +17,36 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Refresh data snapshot
+      - name: Refresh snapshot
         env:
-          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
-        run: python refresh_data.py
+          ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+          ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+          # Optional: set to "sip" if the repo has a paid Alpaca subscription.
+          CIF_FEED: ${{ vars.CIF_FEED }}
+        run: |
+          python src/refresh_data.py
 
       - name: Commit snapshot if changed
         run: |
-          git config user.name "cif-bot"
-          git config user.email "actions@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data_snapshot
           if git diff --cached --quiet; then
-            echo "No changes to commit."
+            echo "No snapshot changes."
           else
-            git commit -m "Daily data refresh $(date -u +%Y-%m-%d)"
+            git commit -m "Automated data snapshot refresh"
             git push
           fi

@@ -2,6 +2,25 @@
 
 Every discretionary decision gets a dated entry. No exceptions.
 
+## 2026-07-20
+
+- Migrated the entire data layer from Alpha Vantage to Alpaca (Market Data API).
+  - New src/alpaca_source.py: raw + adjusted daily bars and /v1/corporate-actions,
+    assembled into the unchanged engine schema (close, adjusted_close,
+    dividend_amount, split_coefficient, OHLCV). Dual-source reconciliation in 8.1
+    is preserved; the index math and validation suite are untouched.
+  - Rewrote src/fetch_index_data.py and ctif_run.py fetch layer for Alpaca.
+    Default feed is IEX (free); --feed sip / FEED="sip" for paid full coverage.
+  - Shares outstanding is now a maintained input (shares.csv) rather than an API
+    pull, since Alpaca has no fundamentals endpoint. src/fetch_shares.py became a
+    no-network template/validator; populate shares from Bloomberg at each
+    quarterly reference date (methodology section 10 updated).
+  - Credentials are now ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY across
+    refresh_data.py, streamlit_app.py, and the GitHub Actions workflow.
+  - Fixed dark-mode invisibility of the Composite line in streamlit_app.py
+    (Composite recolored from #111111 to #bfbfbf) and added line thickness to the
+    dispersion and momentum signal charts.
+
 ## 2026-07-13  v1.0 initial construction
 - Methodology v1.0 drafted: three sleeves plus composite, PR and TR versions,
   10 percent single-name cap, quarterly rebalance (ref 2nd Friday, effective

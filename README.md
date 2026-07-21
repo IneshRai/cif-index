@@ -28,12 +28,14 @@ to others.
    Python Interpreter > Add > Virtualenv).
 3. Install dependencies: PyCharm will offer to install from
    `requirements.txt`, or run `pip install -r requirements.txt`.
-4. Get a free or premium Alpha Vantage API key from
-   https://www.alphavantage.co/support/#api-key
+4. Get Alpaca market-data API keys from https://alpaca.markets (a free
+   account works; it uses the IEX feed. A paid subscription unlocks the SIP
+   feed for full market coverage). You need the API Key ID and Secret Key.
 
 ## Run option A: one-file runner
 
-Open `ctif_run.py`, set `API_KEY` at the top, then right-click > Run.
+Open `ctif_run.py`, set `ALPACA_API_KEY_ID` / `ALPACA_API_SECRET_KEY` at the
+top (or export them as environment variables), then right-click > Run.
 First run downloads and caches ~57 tickers (about a minute on premium);
 later runs read the cache and are instant. Three charts appear plus a
 printed 1-year return table, and `ctif_levels.csv` is written.
@@ -42,17 +44,22 @@ printed 1-year return table, and `ctif_levels.csv` is written.
 
 ```
 python src/validate_math.py
-python src/fetch_index_data.py --constituents constituents.csv --output-dir data/raw --outputsize full
-python src/fetch_shares.py --constituents constituents.csv --output shares.csv
-python src/fetch_index_data.py --tickers SPY QQQ SMH XLU RACK DTCR --output-dir data/benchmarks --outputsize full
+python src/fetch_index_data.py --constituents constituents.csv --output-dir data/raw --start 2015-01-01
+python src/fetch_shares.py --constituents constituents.csv --output shares.csv --scaffold   # then fill from Bloomberg
+python src/fetch_shares.py --constituents constituents.csv --output shares.csv               # validate
+python src/fetch_index_data.py --tickers SPY QQQ SMH XLU --output-dir data/benchmarks --start 2015-01-01
 python src/compute_index.py --data-dir data/raw --constituents constituents.csv --shares shares.csv --output-dir output --base-date 2022-01-03
 python src/make_dashboard.py --output-dir output --dashboard output/dashboard.html --data-dir data/raw --constituents constituents.csv --benchmarks-dir data/benchmarks
 python src/weekly_report.py --levels output/index_levels.csv --output output/weekly_report.md
 python src/make_charts.py --levels output/index_levels.csv --output-dir output/charts
 ```
 
-Set your key first: `export ALPHAVANTAGE_API_KEY=your_key` (macOS/Linux) or
-`set ALPHAVANTAGE_API_KEY=your_key` (Windows), or pass `--api-key`.
+Set your keys first: `export ALPACA_API_KEY_ID=... ALPACA_API_SECRET_KEY=...`
+(macOS/Linux) or `set ALPACA_API_KEY_ID=...` etc. (Windows), or pass
+`--key-id` / `--secret-key`. Shares outstanding are maintained by hand in
+`shares.csv` (Alpaca has no fundamentals endpoint); populate it from Bloomberg
+at each quarterly reference date. Add `--feed sip` if you have a paid Alpaca
+subscription; the default `iex` works on the free tier.
 
 The fetch step verifies every ticker and reports any symbol that fails
 (rename, delisting) before the index computes. Always read
@@ -94,8 +101,9 @@ CHANGELOG.md           dated log of every discretionary decision
 requirements.txt       dependencies
 src/compute_index.py     calculation engine
 src/validate_math.py     39-check validation suite
-src/fetch_index_data.py  Alpha Vantage price fetcher
-src/fetch_shares.py      shares outstanding fetcher
+src/alpaca_source.py     Alpaca data layer (bars + corporate actions)
+src/fetch_index_data.py  Alpaca price fetcher
+src/fetch_shares.py      shares.csv template/validator (maintained input)
 src/make_dashboard.py    interactive HTML dashboard
 src/weekly_report.py     one-page markdown summary
 src/make_charts.py       black and white chart pack

@@ -1,14 +1,26 @@
 """
 fetch_shares.py
 
-Pulls SharesOutstanding from the Alpha Vantage OVERVIEW endpoint for every
-constituent and writes shares.csv (ticker, shares_outstanding, as_of, name).
+Shares outstanding maintenance for the CIF index.
 
-Run this at each quarterly reference date so weights use point-in-time shares
-from the first production quarter forward. The back-cast holds the latest
-snapshot constant, as disclosed in methodology.md section 10.
+Alpaca does NOT provide fundamentals (no shares-outstanding endpoint), so under
+an Alpaca-only data stack shares.csv is a maintained input rather than an API
+pull. This is consistent with index practice and with methodology section 10:
+point-in-time shares are captured at each quarterly reference date and held
+constant between rebalances (the back-cast holds the latest snapshot constant).
+
+Recommended source: Bloomberg field CUR_MKT_CAP / EQY_SH_OUT (or IQ_SHARES) for
+each constituent at the reference date, exported to shares.csv.
+
+This script does two things, neither of which hits a network:
+
+  --scaffold : write/refresh a shares.csv template listing every constituent,
+               preserving any share counts already filled in.
+  (default)  : validate an existing shares.csv against the constituents file,
+               reporting any missing tickers, blank/zero shares, or extras.
 
 Usage
+  python src/fetch_shares.py --constituents constituents.csv --output shares.csv --scaffold
   python src/fetch_shares.py --constituents constituents.csv --output shares.csv
 """
 
@@ -16,86 +28,100 @@ import argparse
 import logging
 import os
 import sys
-import time
 from datetime import date
 
 import pandas as pd
-import requests
 
-BASE_URL = "https://www.alphavantage.co/query"
-log = logging.getLogger("ctif.shares")
+log = logging.getLogger("cif.shares")
 
-
-def parse_overview(payload, ticker):
-    if "Error Message" in payload:
-        raise ValueError(f"{ticker}: API error: {payload['Error Message']}")
-    for k in ("Note", "Information"):
-        if k in payload and "SharesOutstanding" not in payload:
-            raise RuntimeError(f"{ticker}: throttled or notice: {payload[k]}")
-    raw = payload.get("SharesOutstanding")
-    if raw in (None, "", "None", "0"):
-        raise ValueError(f"{ticker}: SharesOutstanding missing in OVERVIEW")
-    shares = float(raw)
-    if shares <= 0:
-        raise ValueError(f"{ticker}: non-positive shares {shares}")
-    return shares, payload.get("Name", "")
+COLUMNS = ["ticker", "shares_outstanding", "as_of", "name"]
 
 
-def fetch_one(session, ticker, api_key, retries=3, backoff=5.0):
-    params = {"function": "OVERVIEW", "symbol": ticker, "apikey": api_key}
-    last_err = None
-    for attempt in range(1, retries + 1):
-        try:
-            resp = session.get(BASE_URL, params=params, timeout=60)
-            resp.raise_for_status()
-            return parse_overview(resp.json(), ticker)
-        except Exception as exc:
-            last_err = exc
-            log.warning("%s attempt %d/%d failed: %s",
-                        ticker, attempt, retries, exc)
-            time.sleep(backoff * attempt)
-    raise RuntimeError(f"{ticker}: failed after {retries} attempts: {last_err}")
+def scaffold(constituents_path, output_path):
+    cons = pd.read_csv(constituents_path)
+    cons["ticker"] = cons["ticker"].str.strip()
+    name_col = "company_name" if "company_name" in cons.columns else None
+
+    existing = {}
+    if os.path.exists(output_path):
+        old = pd.read_csv(output_path)
+        for _, r in old.iterrows():
+            existing[str(r["ticker"]).strip()] = r.to_dict()
+
+    rows = []
+    for _, c in cons.iterrows():
+        t = c["ticker"]
+        prev = existing.get(t, {})
+        rows.append({
+            "ticker": t,
+            "shares_outstanding": prev.get("shares_outstanding", ""),
+            "as_of": prev.get("as_of", ""),
+            "name": prev.get("name", c[name_col] if name_col else ""),
+        })
+    pd.DataFrame(rows, columns=COLUMNS).to_csv(output_path, index=False)
+    filled = sum(1 for r in rows if str(r["shares_outstanding"]).strip()
+                 not in ("", "nan"))
+    log.info("Wrote template %s with %d tickers (%d already filled). "
+             "Populate shares_outstanding from Bloomberg, then re-run without "
+             "--scaffold to validate.", output_path, len(rows), filled)
+
+
+def validate(constituents_path, output_path):
+    if not os.path.exists(output_path):
+        log.error("%s does not exist. Run with --scaffold first.", output_path)
+        return 1
+    cons = pd.read_csv(constituents_path)
+    cons["ticker"] = cons["ticker"].str.strip()
+    need = set(cons["ticker"])
+
+    sh = pd.read_csv(output_path)
+    sh["ticker"] = sh["ticker"].astype(str).str.strip()
+    have = set(sh["ticker"])
+
+    problems = []
+    missing = sorted(need - have)
+    if missing:
+        problems.append(f"missing tickers: {missing}")
+    extra = sorted(have - need)
+    if extra:
+        log.warning("shares.csv has tickers not in constituents: %s", extra)
+
+    vals = pd.to_numeric(sh["shares_outstanding"], errors="coerce")
+    blanks = sorted(sh.loc[vals.isna(), "ticker"])
+    blanks = [t for t in blanks if t in need]
+    if blanks:
+        problems.append(f"blank/non-numeric shares: {blanks}")
+    nonpos = sorted(sh.loc[(vals <= 0).fillna(False), "ticker"])
+    nonpos = [t for t in nonpos if t in need]
+    if nonpos:
+        problems.append(f"non-positive shares: {nonpos}")
+
+    if problems:
+        for p in problems:
+            log.error("%s", p)
+        return 1
+    log.info("shares.csv OK: %d constituents all present with positive shares.",
+             len(need))
+    return 0
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Fetch shares outstanding")
+    ap = argparse.ArgumentParser(description="Maintain shares.csv (no network)")
     ap.add_argument("--constituents", required=True)
     ap.add_argument("--output", required=True)
-    ap.add_argument("--api-key", default=os.environ.get("ALPHAVANTAGE_API_KEY"))
-    ap.add_argument("--sleep", type=float, default=0.9)
+    ap.add_argument("--scaffold", action="store_true",
+                    help="Write/refresh a template instead of validating")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args(argv)
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s")
-    if not args.api_key:
-        log.error("No API key. Set ALPHAVANTAGE_API_KEY or pass --api-key")
-        return 2
 
-    cons = pd.read_csv(args.constituents)
-    tickers = list(cons["ticker"].str.strip())
-    session = requests.Session()
-    rows, failures = [], []
-    for i, t in enumerate(tickers, 1):
-        log.info("[%d/%d] %s", i, len(tickers), t)
-        try:
-            shares, name = fetch_one(session, t, args.api_key)
-            log.info("%s: %.0f shares (%s)", t, shares, name)
-            rows.append({"ticker": t, "shares_outstanding": shares,
-                         "as_of": date.today().isoformat(), "name": name})
-        except Exception as exc:
-            log.error("%s FAILED: %s", t, exc)
-            failures.append(t)
-        time.sleep(args.sleep)
-
-    pd.DataFrame(rows).to_csv(args.output, index=False)
-    log.info("Wrote %d rows to %s", len(rows), args.output)
-    if failures:
-        log.error("FAILED tickers: %s. Fix before computing the index.",
-                  failures)
-        return 1
-    return 0
+    if args.scaffold:
+        scaffold(args.constituents, args.output)
+        return 0
+    return validate(args.constituents, args.output)
 
 
 if __name__ == "__main__":

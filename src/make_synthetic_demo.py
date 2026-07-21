@@ -142,7 +142,7 @@ def main(argv=None):
         f.write("THIS DIRECTORY CONTAINS SYNTHETIC DEMONSTRATION DATA ONLY.\n"
                 "Prices are random walks. Levels and returns have no market\n"
                 "meaning. The purpose is to demonstrate the production\n"
-                "pipeline. Real runs require Alpha Vantage pulls per README.\n")
+                "pipeline. Real runs require Alpaca pulls per README.\n")
     log.info("Wrote %d tickers to %s", len(cons_rows), raw_dir)
     return 0
 

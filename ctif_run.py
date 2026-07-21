@@ -2,15 +2,24 @@
 ctif_run.py  -  Castellan Infrastructure Family, one-file runner
 ============================================================================
 
-Drop this into a PyCharm project, set your Alpha Vantage key below, and run.
-It fetches real prices for the 53 constituents plus benchmarks, caches them
-locally (so re-runs are instant and do not burn API calls), computes the
-index per the CIF methodology, and shows matplotlib charts including a
-1-year comparison against SPY, QQQ, SMH, and XLU.
+Drop this into a PyCharm project, set your Alpaca API keys below (or via
+environment variables), and run. It fetches real prices for the 53
+constituents plus benchmarks from Alpaca, caches them locally (so re-runs are
+instant and do not burn API calls), computes the index per the CIF
+methodology, and shows matplotlib charts including a 1-year comparison against
+SPY, QQQ, SMH, and XLU.
+
+Data source: Alpaca Market Data API.
+  prices  GET /v2/stocks/{symbol}/bars  (raw close + adjustment=all adj close)
+  events  GET /v1/corporate-actions     (dividends and splits)
+  shares  shares.csv (maintained input; Alpaca has no fundamentals endpoint)
+
+The free Alpaca plan is IEX-only (~2.5% of consolidated volume); set FEED to
+"sip" if you have a paid subscription for full market coverage.
 
 This single file mirrors the validated multi-file engine for convenience.
-The multi-file repo (with the 39-check validation suite) remains the
-reference implementation; this exists so you can see charts in one run.
+The multi-file repo (with the validation suite) remains the reference
+implementation; this exists so you can see charts in one run.
 
 Requirements:  pip install pandas numpy requests matplotlib
 Python 3.9+.
@@ -22,16 +31,25 @@ The sleeve-versus-sector-benchmark comparisons (Components vs SMH, Resources
 vs XLU) are more informative than the headline CIF-vs-SPY line.
 """
 
+import os
+
 # ===========================================================================
-# CONFIG  -  edit these two lines
+# CONFIG  -  edit these
 # ===========================================================================
-API_KEY = "PUT_YOUR_ALPHAVANTAGE_KEY_HERE"
+# Alpaca market-data credentials. Prefer environment variables; the literals
+# below are a fallback for local runs. NEVER commit real keys.
+ALPACA_API_KEY_ID = os.environ.get("ALPACA_API_KEY_ID", "PUT_YOUR_ALPACA_KEY_ID_HERE")
+ALPACA_API_SECRET_KEY = os.environ.get("ALPACA_API_SECRET_KEY", "PUT_YOUR_ALPACA_SECRET_HERE")
+
 CACHE_DIR = "ctif_cache"          # local folder for downloaded CSVs
+SHARES_FILE = "shares.csv"        # maintained shares outstanding (see fetch_shares.py)
+FEED = os.environ.get("CIF_FEED") or "iex"   # "iex" (free) or "sip" (paid)
+HISTORY_START = "2015-01-01"      # bar history start; CA data begins Apr 2020
 
 BASE_DATE = "2022-01-03"
 CAP = 0.10                        # 10 percent single-name cap
 FORCE_REFRESH = False             # True to re-download even if cached
-REQUEST_SLEEP = 0.9              # seconds between API calls (premium: 75/min)
+REQUEST_SLEEP = 0.3               # seconds between API calls
 
 # ===========================================================================
 # UNIVERSE  -  ticker, sleeve
@@ -65,7 +83,6 @@ CONSTITUENTS = [
 BENCHMARKS = ["SPY", "QQQ", "SMH", "XLU"]
 
 # ===========================================================================
-import os
 import sys
 import time
 
@@ -73,83 +90,171 @@ import numpy as np
 import pandas as pd
 import requests
 
-BASE_URL = "https://www.alphavantage.co/query"
+DATA_URL = "https://data.alpaca.markets"
+CA_TYPES = "cash_dividend,forward_split,reverse_split"
 SLEEVES = ["Builders", "Components", "Resources"]
 SEASONING_DAYS = 63
 
 
 # ---------------------------------------------------------------------------
-# Data fetch and cache
+# Data fetch and cache (Alpaca)
 # ---------------------------------------------------------------------------
-def fetch_prices(ticker):
+def _headers():
+    return {"APCA-API-KEY-ID": ALPACA_API_KEY_ID,
+            "APCA-API-SECRET-KEY": ALPACA_API_SECRET_KEY,
+            "accept": "application/json"}
+
+
+def _get(session, url, params, retries=3, backoff=5.0):
+    last = None
+    for attempt in range(1, retries + 1):
+        try:
+            r = session.get(url, params=params, headers=_headers(), timeout=60)
+            r.raise_for_status()
+            return r.json()
+        except Exception as exc:
+            last = exc
+            time.sleep(backoff * attempt)
+    raise RuntimeError(f"request failed after {retries}: {last}")
+
+
+def _bars(session, ticker, adjustment):
+    """All daily bars for one ticker at a given adjustment, paginated."""
+    url = f"{DATA_URL}/v2/stocks/{ticker}/bars"
+    out, token = [], None
+    while True:
+        params = {"timeframe": "1Day", "start": HISTORY_START,
+                  "adjustment": adjustment, "feed": FEED, "limit": 10000}
+        if token:
+            params["page_token"] = token
+        js = _get(session, url, params)
+        out.extend(js.get("bars") or [])
+        token = js.get("next_page_token")
+        if not token:
+            break
+    return out
+
+
+_CA_CACHE = {"divs": None, "splits": None}
+
+
+def _load_corporate_actions(session, symbols):
+    """Fetch dividends and splits for the whole universe once, then cache."""
+    if _CA_CACHE["divs"] is not None:
+        return _CA_CACHE["divs"], _CA_CACHE["splits"]
+    url = f"{DATA_URL}/v1/corporate-actions"
+    end = pd.Timestamp.today().strftime("%Y-%m-%d")
+    divs, splits, token = {}, {}, None
+    while True:
+        params = {"symbols": ",".join(symbols), "types": CA_TYPES,
+                  "start": HISTORY_START, "end": end, "limit": 1000}
+        if token:
+            params["page_token"] = token
+        js = _get(session, url, params)
+        ca = js.get("corporate_actions", {}) or {}
+        for d in ca.get("cash_dividends", []) or []:
+            sym, ex = d.get("symbol"), d.get("ex_date")
+            rate = d.get("rate", d.get("cash"))
+            if sym and ex and rate is not None:
+                divs[(sym, ex)] = divs.get((sym, ex), 0.0) + float(rate)
+        for k in ("forward_splits", "reverse_splits"):
+            for s in ca.get(k, []) or []:
+                sym, ex = s.get("symbol"), s.get("ex_date")
+                nr, orr = s.get("new_rate"), s.get("old_rate")
+                if sym and ex and nr and orr:
+                    splits[(sym, ex)] = float(nr) / float(orr)
+        token = js.get("next_page_token")
+        if not token:
+            break
+    _CA_CACHE["divs"], _CA_CACHE["splits"] = divs, splits
+    return divs, splits
+
+
+def fetch_prices(ticker, session=None, divs=None, splits=None):
     """Return a DataFrame indexed by date with close, adj_close, div, split."""
-    params = {"function": "TIME_SERIES_DAILY_ADJUSTED", "symbol": ticker,
-              "outputsize": "full", "apikey": API_KEY, "datatype": "json"}
-    r = requests.get(BASE_URL, params=params, timeout=60)
-    r.raise_for_status()
-    js = r.json()
-    if "Error Message" in js:
-        raise ValueError(f"{ticker}: {js['Error Message']}")
-    if "Time Series (Daily)" not in js:
-        note = js.get("Note") or js.get("Information") or js
-        raise RuntimeError(f"{ticker}: no data. API said: {note}")
-    ts = js["Time Series (Daily)"]
+    own = session is None
+    session = session or requests.Session()
+    if divs is None or splits is None:
+        divs, splits = _load_corporate_actions(session, [ticker])
+    raw = _bars(session, ticker, "raw")
+    adj = _bars(session, ticker, "all")
+    if own:
+        pass
+    adj_close = {b["t"][:10]: float(b["c"]) for b in adj}
     rows = []
-    for day, v in ts.items():
+    for b in raw:
+        day = b["t"][:10]
+        c = float(b["c"])
         rows.append({
             "date": day,
-            "close": float(v["4. close"]),
-            "adj_close": float(v["5. adjusted close"]),
-            "div": float(v["7. dividend amount"]),
-            "split": float(v["8. split coefficient"]),
+            "close": c,
+            "adj_close": adj_close.get(day, c),
+            "div": float(divs.get((ticker, day), 0.0)),
+            "split": float(splits.get((ticker, day), 1.0)),
         })
+    if not rows:
+        raise RuntimeError(f"{ticker}: no bars (check symbol/feed/dates)")
     df = pd.DataFrame(rows)
     df["date"] = pd.to_datetime(df["date"])
     return df.sort_values("date").set_index("date")
 
 
-def fetch_shares(ticker):
-    params = {"function": "OVERVIEW", "symbol": ticker, "apikey": API_KEY}
-    r = requests.get(BASE_URL, params=params, timeout=60)
-    r.raise_for_status()
-    js = r.json()
-    val = js.get("SharesOutstanding")
-    if val in (None, "", "None", "0"):
-        return None
-    return float(val)
+def load_shares_file():
+    """Read maintained shares.csv into {ticker: shares_outstanding}."""
+    if not os.path.exists(SHARES_FILE):
+        print(f"WARNING: {SHARES_FILE} not found. Cap weights need shares; "
+              "run: python src/fetch_shares.py --constituents constituents.csv "
+              f"--output {SHARES_FILE} --scaffold  then fill it from Bloomberg.")
+        return {}
+    sh = pd.read_csv(SHARES_FILE)
+    sh["ticker"] = sh["ticker"].astype(str).str.strip()
+    vals = pd.to_numeric(sh["shares_outstanding"], errors="coerce")
+    out = {t: float(v) for t, v in zip(sh["ticker"], vals)
+           if pd.notna(v) and v > 0}
+    return out
 
 
-def get_cached(ticker, kind, fetch_fn):
-    """kind is 'px' or 'sh'. Cache to CACHE_DIR, fetch on miss."""
+def get_cached(ticker, fetch_fn):
+    """Price cache to CACHE_DIR, fetch on miss."""
     os.makedirs(CACHE_DIR, exist_ok=True)
-    path = os.path.join(CACHE_DIR, f"{ticker}_{kind}.csv")
+    path = os.path.join(CACHE_DIR, f"{ticker}_px.csv")
     if os.path.exists(path) and not FORCE_REFRESH:
-        if kind == "px":
-            return pd.read_csv(path, parse_dates=["date"]).set_index("date")
-        return pd.read_csv(path)["shares"].iloc[0]
+        return pd.read_csv(path, parse_dates=["date"]).set_index("date")
     result = fetch_fn(ticker)
     time.sleep(REQUEST_SLEEP)
-    if kind == "px":
-        result.to_csv(path)
-    else:
-        pd.DataFrame({"shares": [result if result else np.nan]}).to_csv(
-            path, index=False)
+    result.to_csv(path)
     return result
 
 
 def load_all():
     """Fetch/cache every ticker and benchmark. Returns price dict, shares."""
-    px, shares = {}, {}
+    px = {}
     all_tickers = [t for t, _ in CONSTITUENTS] + BENCHMARKS
+    session = requests.Session()
+    # Pre-load corporate actions for the whole universe in one sweep (unless
+    # everything is cached, in which case we lazily skip the network entirely).
+    need_fetch = FORCE_REFRESH or any(
+        not os.path.exists(os.path.join(CACHE_DIR, f"{t}_px.csv"))
+        for t in all_tickers)
+    if need_fetch:
+        try:
+            _load_corporate_actions(session, all_tickers)
+        except Exception as e:
+            print(f"WARNING: corporate-actions fetch failed ({e}); "
+                  "dividends/splits will default to none for freshly fetched "
+                  "tickers.")
+    divs = _CA_CACHE["divs"] or {}
+    splits = _CA_CACHE["splits"] or {}
+
     for i, t in enumerate(all_tickers, 1):
         print(f"[{i}/{len(all_tickers)}] {t} ...", end=" ", flush=True)
         try:
-            px[t] = get_cached(t, "px", fetch_prices)
-            if t not in BENCHMARKS:
-                shares[t] = get_cached(t, "sh", fetch_shares)
+            px[t] = get_cached(
+                t, lambda tk: fetch_prices(tk, session, divs, splits))
             print(f"{len(px[t])} rows")
         except Exception as e:
             print(f"FAILED: {e}")
+    shares = load_shares_file()
     return px, shares
 
 
@@ -587,8 +692,10 @@ def print_summary(levels, bench):
 
 # ---------------------------------------------------------------------------
 def main():
-    if API_KEY == "PUT_YOUR_ALPHAVANTAGE_KEY_HERE":
-        print("Set API_KEY at the top of the file first.")
+    if (ALPACA_API_KEY_ID.startswith("PUT_YOUR")
+            or ALPACA_API_SECRET_KEY.startswith("PUT_YOUR")):
+        print("Set ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY (env vars or "
+              "the CONFIG block at the top of the file) first.")
         sys.exit(1)
     print("Loading data (first run downloads and caches; later runs are "
           "instant)...")
