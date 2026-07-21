@@ -1,54 +1,54 @@
 ticker,shares_outstanding,as_of,name
-FIX,,,Comfort Systems USA
-EME,,,EMCOR Group
-PWR,,,Quanta Services
-MTZ,,,MasTec
-STRL,,,Sterling Infrastructure
-IESC,,,IES Holdings
-AGX,,,Argan
-VRT,,,Vertiv Holdings
-ETN,,,Eaton
-HUBB,,,Hubbell
-NVT,,,nVent Electric
-MOD,,,Modine Manufacturing
-POWL,,,Powell Industries
-GEV,,,GE Vernova
-MU,,,Micron Technology
-SNDK,,,Sandisk
-WDC,,,Western Digital
-STX,,,Seagate Technology Holdings
-AVGO,,,Broadcom
-MRVL,,,Marvell Technology
-ANET,,,Arista Networks
-APH,,,Amphenol
-ALAB,,,Astera Labs
-CRDO,,,Credo Technology Group
-COHR,,,Coherent
-LITE,,,Lumentum Holdings
-CIEN,,,Ciena
-FN,,,Fabrinet
-MPWR,,,Monolithic Power Systems
-DELL,,,Dell Technologies
-HPE,,,Hewlett Packard Enterprise
-SMCI,,,Super Micro Computer
-CLS,,,Celestica
-GLW,,,Corning
-VST,,,Vistra
-CEG,,,Constellation Energy
-NRG,,,NRG Energy
-TLN,,,Talen Energy
-PEG,,,Public Service Enterprise Group
-D,,,Dominion Energy
-AEP,,,American Electric Power
-SO,,,Southern Company
-ETR,,,Entergy
-EXC,,,Exelon
-CCJ,,,Cameco
-BWXT,,,BWX Technologies
-OKLO,,,Oklo
-SMR,,,NuScale Power
-LEU,,,Centrus Energy
-BE,,,Bloom Energy
-EQIX,,,Equinix
-DLR,,,Digital Realty Trust
-IRM,,,Iron Mountain
+FIX,35183967,2026-07-21,Comfort Systems USA
+EME,44532567,2026-07-21,EMCOR Group
+PWR,150060149,2026-07-21,Quanta Services
+MTZ,79018556,2026-07-21,MasTec
+STRL,30685954,2026-07-21,Sterling Infrastructure
+IESC,19923887,2026-07-21,IES Holdings
+AGX,14019247,2026-07-21,Argan
+VRT,384108816,2026-07-21,Vertiv Holdings
+ETN,388300000,2026-07-21,Eaton
+HUBB,52841777,2026-07-21,Hubbell
+NVT,161720452,2026-07-21,nVent Electric
+MOD,53107179,2026-07-21,Modine Manufacturing
+POWL,36431649,2026-07-21,Powell Industries
+GEV,268719995,2026-07-21,GE Vernova
+MU,1129393151,2026-07-21,Micron Technology
+SNDK,148089758,2026-07-21,Sandisk
+WDC,344682131,2026-07-21,Western Digital
+STX,224228992,2026-07-21,Seagate Technology Holdings
+AVGO,4757580198,2026-07-21,Broadcom
+MRVL,897544423,2026-07-21,Marvell Technology
+ANET,1259169438,2026-07-21,Arista Networks
+APH,1230234445,2026-07-21,Amphenol
+ALAB,171407939,2026-07-21,Astera Labs
+CRDO,186477898,2026-07-21,Credo Technology Group
+COHR,195639321,2026-07-21,Coherent
+LITE,77800000,2026-07-21,Lumentum Holdings
+CIEN,141552922,2026-07-21,Ciena
+FN,35829740,2026-07-21,Fabrinet
+MPWR,49129267,2026-07-21,Monolithic Power Systems
+DELL,646142428,2026-07-21,Dell Technologies
+HPE,1324203521,2026-07-21,Hewlett Packard Enterprise
+SMCI,646873027,2026-07-21,Super Micro Computer
+CLS,114973107,2026-07-21,Celestica
+GLW,860637825,2026-07-21,Corning
+VST,337182468,2026-07-21,Vistra
+CEG,357102017,2026-07-21,Constellation Energy
+NRG,210986470,2026-07-21,NRG Energy
+TLN,47795005,2026-07-21,Talen Energy
+PEG,498321402,2026-07-21,Public Service Enterprise Group
+D,879512484,2026-07-21,Dominion Energy
+AEP,544105032,2026-07-21,American Electric Power
+SO,1127301098,2026-07-21,Southern Company
+ETR,466595090,2026-07-21,Entergy
+EXC,1023208142,2026-07-21,Exelon
+CCJ,435532978,2026-07-21,Cameco
+BWXT,91614649,2026-07-21,BWX Technologies
+OKLO,173990987,2026-07-21,Oklo
+SMR,346105785,2026-07-21,NuScale Power
+LEU,19672794,2026-07-21,Centrus Energy
+BE,284443868,2026-07-21,Bloom Energy
+EQIX,98624248,2026-07-21,Equinix
+DLR,369976002,2026-07-21,Digital Realty Trust
+IRM,297524681,2026-07-21,Iron Mountain
