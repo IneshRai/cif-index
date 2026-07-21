@@ -345,7 +345,11 @@ def run_sleeve(members, pr, tr, sa, shares, spans, calendar, schedule,
         mcap = px * pd.Series({t: shares.get(t, np.nan) for t in elig})
         mcap = mcap.dropna()
         if mcap.empty:
-            return None
+            # No usable shares for any eligible name. Rather than crash, fall
+            # back to equal weighting for this rebalance. This happens when
+            # shares.csv is not populated (Alpaca has no fundamentals endpoint).
+            # Populate shares.csv to get true cap weighting.
+            return cap_weights(pd.Series(1.0, index=elig), cap)
         return cap_weights(mcap.astype(float), cap)
 
     eff_map = {e: r for r, e in schedule}
@@ -379,6 +383,18 @@ def run_sleeve(members, pr, tr, sa, shares, spans, calendar, schedule,
 
 
 def compute_index(px, shares, return_weights=False):
+    # Resolve the weighting actually used and say so plainly in the log.
+    usable_shares = sum(1 for t, _ in CONSTITUENTS if shares.get(t))
+    if WEIGHTING == "equal":
+        print("Weighting: EQUAL (CIF_WEIGHTING=equal).")
+    elif usable_shares == 0:
+        print("Weighting: EQUAL (fallback) - shares.csv has no usable share "
+              "counts, so cap weighting is not possible. Populate shares.csv "
+              "for cap weighting.")
+    else:
+        print(f"Weighting: CAP ({usable_shares}/{len(CONSTITUENTS)} names have "
+              "shares).")
+
     pr_map, tr_map, sa_map, spans = {}, {}, {}, {}
     for t, _ in CONSTITUENTS:
         if t not in px:
